@@ -1,6 +1,5 @@
 package com.androidcourse.shoppinglist;
 
-import android.graphics.Color;
 import android.support.annotation.NonNull;
 import android.support.v7.widget.RecyclerView;
 import android.view.LayoutInflater;
@@ -13,11 +12,9 @@ import java.util.List;
 public class ShoppingListAdapter extends RecyclerView.Adapter<ShoppingListAdapter.ViewHolder> {
 
 	private List<Product> shoppingList;
-	private ItemClickListener itemClickListener;
 
-	public ShoppingListAdapter(List<Product> shoppingList, ItemClickListener itemClickListener) {
+	public ShoppingListAdapter(List<Product> shoppingList) {
 		this.shoppingList = shoppingList;
-		this.itemClickListener = itemClickListener;
 	}
 
 	@NonNull
@@ -45,20 +42,6 @@ public class ShoppingListAdapter extends RecyclerView.Adapter<ShoppingListAdapte
 		public ViewHolder(@NonNull View itemView) {
 			super(itemView);
 			tvProductName = itemView.findViewById(android.R.id.text1);
-
-			itemView.setOnLongClickListener(new View.OnLongClickListener() {
-				@Override
-				public boolean onLongClick(View v) {
-					itemClickListener.onItemLongClick(shoppingList.get(getAdapterPosition()));
-					return false;
-				}
-			});
-
 		}
 	}
-
-	public interface ItemClickListener {
-		void onItemLongClick(Product product);
-	}
-
 }
