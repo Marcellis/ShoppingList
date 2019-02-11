@@ -2,6 +2,7 @@ package com.androidcourse.shoppinglist;
 
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.os.Handler;
 import android.support.annotation.NonNull;
 import android.support.design.widget.FloatingActionButton;
 import android.support.v7.app.AppCompatActivity;
@@ -18,13 +19,10 @@ import android.widget.EditText;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 
 public class ShoppingListActivity extends AppCompatActivity implements RecyclerView.OnItemTouchListener {
-
-	public final static int TASK_INSERT_PRODUCT = 0;
-	public final static int TASK_DELETE_PRODUCT = 1;
-	public final static int TASK_GET_ALL_PRODUCTS = 2;
-	public final static int TASK_DELETE_ALL_PRODUCTS = 3;
 
 	private RecyclerView rvShoppingList;
 	private EditText etInput;
@@ -33,6 +31,7 @@ public class ShoppingListActivity extends AppCompatActivity implements RecyclerV
 	private ProductRoomDatabase db;
 
 	private GestureDetector gestureDetector;
+	private Executor executor = Executors.newSingleThreadExecutor();
 
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
@@ -55,8 +54,8 @@ public class ShoppingListActivity extends AppCompatActivity implements RecyclerV
 			@Override
 			public void onClick(View view) {
 				String input = etInput.getText().toString();
-				Product product = new Product(input);
-				new ProductAsyncTask(TASK_INSERT_PRODUCT).execute(product);
+				final Product product = new Product(input);
+				insertProduct(product);
 			}
 		});
 	}
@@ -89,20 +88,87 @@ public class ShoppingListActivity extends AppCompatActivity implements RecyclerV
 				View child = rvShoppingList.findChildViewUnder(e.getX(), e.getY());
 				if (child != null) {
 					int adapterPosition = rvShoppingList.getChildAdapterPosition(child);
-					new ProductAsyncTask(TASK_DELETE_PRODUCT).execute(shoppingList.get(adapterPosition));
+					deleteProduct(shoppingList.get(adapterPosition));
 				}
 			}
 		});
 		rvShoppingList.addOnItemTouchListener(this);
-
-		new ProductAsyncTask(TASK_GET_ALL_PRODUCTS).execute();
+		getAllProducts();
 	}
 
 	/**
-	 * Notify the adapter that the data set has changed.
+	 * Update the shopping list
 	 */
-	private void updateUI() {
+	private void updateUI(List<Product> products) {
+		shoppingList.clear();
+		shoppingList.addAll(products);
 		shoppingListAdapter.notifyDataSetChanged();
+	}
+
+	/**
+	 * Get all products from the database and update the uit with these products.
+	 */
+	private void getAllProducts() {
+		executor.execute(new Runnable() {
+			@Override
+			public void run() {
+				final List<Product> products = db.productDao().getAllProducts();
+				runOnUiThread(new Runnable() {
+					@Override
+					public void run() {
+						updateUI(products);
+					}
+				});
+			}
+		});
+	}
+
+	/**
+	 * Insert a product into the database and update the UI.
+	 * @param product Product to be inserted
+	 */
+	private void insertProduct(final Product product) {
+		executor.execute(new Runnable() {
+			@Override
+			public void run() {
+				db.productDao().insert(product);
+				getAllProducts();
+				runOnUiThread(new Runnable() { // Optionally clear the text from the input field
+					@Override
+					public void run() {
+						etInput.setText("");
+					}
+				});
+			}
+		});
+	}
+
+	/**
+	 * Delete a product from the database and update the UI.
+	 * @param product Product to be deleted
+	 */
+	private void deleteProduct(final Product product) {
+		executor.execute(new Runnable() {
+			@Override
+			public void run() {
+				db.productDao().delete(product);
+				getAllProducts();
+			}
+		});
+	}
+
+	/**
+	 * Delete all products from the database and update the UI.
+	 * @param products List<Product> to be deleted.
+	 */
+	private void deleteAllProducts(final List<Product> products) {
+		executor.execute(new Runnable() {
+			@Override
+			public void run() {
+				db.productDao().delete(products);
+				getAllProducts();
+			}
+		});
 	}
 
 	@Override
@@ -117,7 +183,7 @@ public class ShoppingListActivity extends AppCompatActivity implements RecyclerV
 		// Checking the item id of our menu item.
 		if (item.getItemId() == R.id.action_delete_item) {
 			// Deleting all items and notifying our list adapter of the changes.
-			new ProductAsyncTask(TASK_DELETE_ALL_PRODUCTS).execute();
+			deleteAllProducts(shoppingList);
 			return true;
 		}
 
@@ -139,45 +205,4 @@ public class ShoppingListActivity extends AppCompatActivity implements RecyclerV
 	public void onRequestDisallowInterceptTouchEvent(boolean b) {
 
 	}
-
-	/**
-	 * Class which handles the ProductRoomDatabase transactions asynchronously.
-	 */
-	public class ProductAsyncTask extends AsyncTask<Product, Void, List<Product>> {
-
-		private int taskCode;
-
-		public ProductAsyncTask(int taskCode) {
-			this.taskCode = taskCode;
-		}
-
-		@Override
-		protected List<Product> doInBackground(Product... products) {
-			switch (taskCode) {
-				case TASK_INSERT_PRODUCT:
-					db.productDao().insert(products[0]);
-					break;
-
-				case TASK_DELETE_PRODUCT:
-					db.productDao().delete(products[0]);
-					break;
-
-				case TASK_DELETE_ALL_PRODUCTS:
-					db.productDao().delete(shoppingList);
-					break;
-			}
-
-			//To return a new list with the updated data, we get all the data from the database again.
-			return db.productDao().getAllProducts();
-		}
-
-		@Override
-		protected void onPostExecute(List<Product> list) {
-			super.onPostExecute(list);
-			shoppingList.clear();
-			shoppingList.addAll(list);
-			updateUI();
-		}
-	}
-
 }
